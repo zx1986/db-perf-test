@@ -34,8 +34,16 @@ START_TIME=$(cat "$START_FILE")
 END_TIME=$(cat "$END_FILE")
 
 echo "=== Sysbench Report Generator ==="
-echo "Start time: $(date -d @${START_TIME} '+%Y-%m-%d %H:%M:%S')"
-echo "End time: $(date -d @${END_TIME} '+%Y-%m-%d %H:%M:%S')"
+format_date() {
+    if [[ "$(uname)" == "Darwin" ]]; then
+        date -r "$1" '+%Y-%m-%d %H:%M:%S'
+    else
+        date -d "@$1" '+%Y-%m-%d %H:%M:%S'
+    fi
+}
+
+echo "Start time: $(format_date ${START_TIME})"
+echo "End time: $(format_date ${END_TIME})"
 echo "Duration: $(( (END_TIME - START_TIME) / 60 )) minutes"
 echo ""
 
