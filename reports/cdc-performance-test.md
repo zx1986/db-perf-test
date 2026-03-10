@@ -2,6 +2,7 @@
 
 **Date:** 2026-03-10
 **Pipeline:** MariaDB -> Debezium -> Kafka -> JDBC Sink -> YugabyteDB
+**How to run:** See [docs/cdc-test.md](../docs/cdc-test.md)
 
 ## Environment
 
@@ -22,17 +23,6 @@
 | minikube-m03 | db | yb-tserver-1 |
 | minikube-m04 | db | yb-tserver-0 |
 
-### Component Versions
-
-| Component | Version | Image |
-|-----------|---------|-------|
-| YugabyteDB | 2.23.1.0-b0 | yugabytedb/yugabyte |
-| MariaDB | 11.8.6 | mariadb:11 |
-| Apache Kafka | 3.9.2 | apache/kafka:3.9.2 |
-| Kafka Connect | 7.8.0-ccs | confluentinc/cp-kafka-connect:7.8.0 |
-| Debezium MySQL Connector | 3.1.2 | via confluent-hub |
-| Confluent JDBC Sink Connector | 10.9.2 | via confluent-hub |
-
 ### YugabyteDB Configuration
 
 - 3 masters + 3 tservers, RF=3
@@ -40,64 +30,9 @@
 - Storage: 10 Gi per tserver
 - Shards: 2 per tserver (ysql + yb)
 
-### CDC Pipeline Configuration
-
-**Debezium Source Connector:**
-- Reads MariaDB binlog (ROW format, FULL row image)
-- `ExtractNewRecordState` SMT applied on source side (flat messages in Kafka)
-- Single task
-
-**JDBC Sink Connector:**
-- `insert.mode: upsert` (handles both inserts and updates)
-- `pk.mode: record_key`, `pk.fields: id`
-- `auto.create: true` (creates table in YugabyteDB automatically)
-- Single task
-- Default batch size (3000)
-
-**Kafka:**
-- Single node, KRaft mode (no Zookeeper)
-- Replication factor: 1
-
-### Test Table Schema
-
-```sql
--- MariaDB (source)
-CREATE TABLE cdc_test (
-  id INT PRIMARY KEY AUTO_INCREMENT,
-  val INT NOT NULL DEFAULT 0
-);
-```
-
-## Test Method
-
-### Test 1: 10K Updates
-
-1. Insert 10,000 rows into MariaDB (`val = 0`)
-2. Wait for initial sync to YugabyteDB (all 10K rows with `val = 0`)
-3. Run `UPDATE cdc_test SET val = val + 1` (single transaction, all 10K rows)
-4. Record T1 (before UPDATE), T2 (after UPDATE returns)
-5. Poll YugabyteDB every 1s: `SELECT COUNT(*) FROM cdc_test WHERE val >= 1`
-6. Record T3 when count reaches 10,000
-7. Report: UPDATE time (T2-T1), Replication time (T3-T2), Total (T3-T1)
-
-### Test 2: 100K Updates
-
-Same method as Test 1 but with 100,000 rows. Node CPU monitored via
-node_exporter every 10s during replication.
-
-### Test 3: 100K Updates with 3 Partitions / 3 Tasks
-
-Same method as Test 2 but with:
-- Kafka topic pre-created with 3 partitions
-- JDBC sink connector `tasks.max=3`
-
-Kafka partitions messages by the row's primary key (hash of PK determines
-partition). This ensures per-row ordering while enabling parallelism across
-different rows.
-
 ## Results
 
-### Test 1: 10K Updates
+### Test 1: 10K Updates (1 partition, 1 task)
 
 | Metric | Value |
 |--------|-------|
@@ -108,7 +43,7 @@ different rows.
 | Total end-to-end time | 15.8s |
 | Throughput | 633 updates/s |
 
-### Test 2: 100K Updates
+### Test 2: 100K Updates (1 partition, 1 task)
 
 | Metric | Value |
 |--------|-------|
@@ -138,7 +73,7 @@ different rows.
 | Active sink writing | 7-9% | 26-27% | 19-20% | 19-20% |
 | Comparison: sysbench 24 threads | 11% | 90% | 83% | 85% |
 
-### Test 3: 100K Updates (3 Partitions, 3 Tasks)
+### Test 3: 100K Updates (3 partitions, 3 tasks)
 
 | Metric | Value |
 |--------|-------|
@@ -207,16 +142,6 @@ writing rate during active phases was consistent (~700 rows/s).
 Increasing from 1 task to 3 tasks (with 3 Kafka partitions) yielded a 7.4x
 improvement in replication time and 7.5x in throughput (273 → 2,042 updates/s).
 Tserver CPU rose from 19-27% to 34-48%, still well below saturation.
-
-**How partitioning preserves CDC ordering:**
-- Debezium uses the row's primary key as the Kafka message key
-- Kafka's partitioner hashes the key: `partition = hash(PK) % num_partitions`
-- Same PK always goes to the same partition → per-row CRUD ordering is guaranteed
-- Different PKs go to different partitions → processed by different sink tasks in parallel
-
-This means parallelism scales with the number of distinct primary keys being
-modified. The maximum useful parallelism equals the number of partitions (more
-tasks than partitions results in idle tasks).
 
 ## Potential Further Optimizations
 
