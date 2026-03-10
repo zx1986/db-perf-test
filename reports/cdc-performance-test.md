@@ -85,6 +85,16 @@ CREATE TABLE cdc_test (
 Same method as Test 1 but with 100,000 rows. Node CPU monitored via
 node_exporter every 10s during replication.
 
+### Test 3: 100K Updates with 3 Partitions / 3 Tasks
+
+Same method as Test 2 but with:
+- Kafka topic pre-created with 3 partitions
+- JDBC sink connector `tasks.max=3`
+
+Kafka partitions messages by the row's primary key (hash of PK determines
+partition). This ensures per-row ordering while enabling parallelism across
+different rows.
+
 ## Results
 
 ### Test 1: 10K Updates
@@ -127,6 +137,27 @@ node_exporter every 10s during replication.
 | Debezium reading (0-60s) | 23-43% | 5-17% | 5-11% | 5-19% |
 | Active sink writing | 7-9% | 26-27% | 19-20% | 19-20% |
 | Comparison: sysbench 24 threads | 11% | 90% | 83% | 85% |
+
+### Test 3: 100K Updates (3 Partitions, 3 Tasks)
+
+| Metric | Value |
+|--------|-------|
+| Rows | 100,000 |
+| Kafka partitions | 3 |
+| Sink tasks | 3 |
+| UPDATE execution (MariaDB) | ~280ms |
+| Replication time | 49s |
+| Throughput | 2,042 updates/s |
+
+#### Comparison: 1 Task vs 3 Tasks (100K Updates)
+
+| Metric | 1 Task | 3 Tasks | Improvement |
+|--------|--------|---------|-------------|
+| Replication time | 365s | 49s | 7.4x faster |
+| Throughput | 273 updates/s | 2,042 updates/s | 7.5x higher |
+| Tserver CPU | 19-27% | 34-48% | Higher utilization |
+
+No count regression anomaly observed with 3 tasks.
 
 ## Findings
 
@@ -171,10 +202,25 @@ After a ~135s pause, the second wave progressed steadily to completion.
 The lower end-to-end throughput is due to the stall period. The actual
 writing rate during active phases was consistent (~700 rows/s).
 
-## Potential Optimizations (Not Tested)
+### 6. Parallelizing with partitions and tasks dramatically improves throughput
 
-1. **Increase sink connector tasks** - `tasks.max > 1` to parallelize writes
+Increasing from 1 task to 3 tasks (with 3 Kafka partitions) yielded a 7.4x
+improvement in replication time and 7.5x in throughput (273 → 2,042 updates/s).
+Tserver CPU rose from 19-27% to 34-48%, still well below saturation.
+
+**How partitioning preserves CDC ordering:**
+- Debezium uses the row's primary key as the Kafka message key
+- Kafka's partitioner hashes the key: `partition = hash(PK) % num_partitions`
+- Same PK always goes to the same partition → per-row CRUD ordering is guaranteed
+- Different PKs go to different partitions → processed by different sink tasks in parallel
+
+This means parallelism scales with the number of distinct primary keys being
+modified. The maximum useful parallelism equals the number of partitions (more
+tasks than partitions results in idle tasks).
+
+## Potential Further Optimizations
+
+1. **Increase partitions/tasks further** - tserver CPU still has headroom at 3 tasks
 2. **Increase batch size** - `consumer.max.poll.records` and batch.size
 3. **Use YugabyteDB JDBC driver** - native driver may optimize distributed writes
-4. **Multiple sink connectors** - partition the topic for parallel consumption
-5. **Tune Debezium** - `max.batch.size`, `max.queue.size` for faster source reading
+4. **Tune Debezium** - `max.batch.size`, `max.queue.size` for faster source reading
