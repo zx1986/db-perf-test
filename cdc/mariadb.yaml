@@ -1,0 +1,79 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cdc-mariadb-config
+data:
+  binlog.cnf: |
+    [mysqld]
+    server-id=1
+    log_bin=mysql-bin
+    binlog_format=ROW
+    binlog_row_image=FULL
+    expire_logs_days=3
+  init.sql: |
+    GRANT RELOAD, REPLICATION SLAVE, REPLICATION CLIENT ON *.* TO 'debezium'@'%';
+    FLUSH PRIVILEGES;
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cdc-mariadb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cdc-mariadb
+  template:
+    metadata:
+      labels:
+        app: cdc-mariadb
+    spec:
+      nodeSelector:
+        role: master
+      containers:
+      - name: mariadb
+        image: mariadb:11
+        env:
+        - name: MARIADB_ROOT_PASSWORD
+          value: rootpass
+        - name: MARIADB_DATABASE
+          value: testdb
+        - name: MARIADB_USER
+          value: debezium
+        - name: MARIADB_PASSWORD
+          value: debezium
+        ports:
+        - containerPort: 3306
+        resources:
+          requests:
+            cpu: "10m"
+            memory: "256Mi"
+          limits:
+            cpu: "1"
+            memory: "512Mi"
+        volumeMounts:
+        - name: config
+          mountPath: /etc/mysql/conf.d/binlog.cnf
+          subPath: binlog.cnf
+        - name: config
+          mountPath: /docker-entrypoint-initdb.d/init.sql
+          subPath: init.sql
+        - name: data
+          mountPath: /var/lib/mysql
+      volumes:
+      - name: config
+        configMap:
+          name: cdc-mariadb-config
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cdc-mariadb
+spec:
+  selector:
+    app: cdc-mariadb
+  ports:
+  - port: 3306
+    targetPort: 3306

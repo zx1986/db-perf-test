@@ -1,6 +1,8 @@
 .PHONY: help deploy-aws deploy-minikube clean status ysql
 .PHONY: sysbench-prepare sysbench-run sysbench-cleanup sysbench-shell sysbench-logs
 .PHONY: report
+.PHONY: range-query-test
+.PHONY: cdc-deploy cdc-test cdc-status cdc-clean
 
 KUBE_CONTEXT ?= minikube
 NAMESPACE ?= yugabyte-test
@@ -80,6 +82,23 @@ ysql: ## Connect to YugabyteDB YSQL shell
 
 port-forward-prometheus: ## Port forward Prometheus to localhost:9090
 	$(KUBECTL) port-forward svc/$(RELEASE_NAME)-prometheus 9090:9090
+
+# Range query test
+range-query-test: ## Run PK range query performance test
+	@KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) ./scripts/range-query-test.sh
+
+# CDC pipeline (MariaDB -> Debezium -> Kafka -> JDBC Sink -> YugabyteDB)
+cdc-deploy: ## Deploy CDC pipeline and register connectors
+	@KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) ./cdc/deploy.sh
+
+cdc-test: ## Run CDC replication test (10K updates)
+	@KUBE_CONTEXT=$(KUBE_CONTEXT) NAMESPACE=$(NAMESPACE) ./cdc/run-test.sh
+
+cdc-status: ## Show CDC connector status
+	@$(KUBECTL) exec deployment/cdc-kafka-connect -- curl -sf http://localhost:8083/connectors?expand=status 2>/dev/null | python3 -m json.tool || echo "Kafka Connect not ready"
+
+cdc-clean: ## Delete CDC pipeline resources
+	@$(KUBECTL) delete -f cdc/ --ignore-not-found
 
 # Cleanup
 clean: ## Delete all resources
