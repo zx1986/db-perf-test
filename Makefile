@@ -1,13 +1,19 @@
-.PHONY: help deploy-aws deploy-minikube clean status ysql
+.PHONY: help deploy-aws deploy-minikube deploy-k3s-virsh clean status ysql
 .PHONY: sysbench-prepare sysbench-run sysbench-cleanup sysbench-shell sysbench-logs
 .PHONY: report
 .PHONY: range-query-test
 .PHONY: cdc-deploy cdc-test cdc-status cdc-clean
+.PHONY: setup-k3s-virsh teardown-k3s-virsh setup-slow-disk setup-slow-throughput
 
 KUBE_CONTEXT ?= minikube
 NAMESPACE ?= yugabyte-test
 RELEASE_NAME ?= yb-bench
 CHART_DIR := charts/yb-benchmark
+
+# Slow disk simulation parameters
+DISK_DELAY_MS ?= 0
+DISK_BW_MBPS ?= 0
+DISK_IOPS ?= 0
 
 KUBECTL := kubectl --context $(KUBE_CONTEXT) -n $(NAMESPACE)
 SYSBENCH_POD := deployment/$(RELEASE_NAME)-sysbench
@@ -38,6 +44,18 @@ deploy-minikube: ## Deploy full stack with minikube-optimized settings
 		--create-namespace \
 		--set fullnameOverride=$(RELEASE_NAME) \
 		-f $(CHART_DIR)/values-minikube.yaml \
+		--wait --timeout 15m
+
+deploy-k3s-virsh: ## Deploy full stack on k3s-virsh cluster
+	@helm repo add yugabytedb https://charts.yugabyte.com 2>/dev/null || true
+	@helm repo update yugabytedb
+	@helm dependency build $(CHART_DIR)
+	@helm upgrade --install $(RELEASE_NAME) $(CHART_DIR) \
+		--kube-context $(KUBE_CONTEXT) \
+		--namespace $(NAMESPACE) \
+		--create-namespace \
+		--set fullnameOverride=$(RELEASE_NAME) \
+		-f $(CHART_DIR)/values-k3s-virsh.yaml \
 		--wait --timeout 15m
 
 deploy-benchmarks: ## Deploy benchmarks only (use existing YugabyteDB)
@@ -99,6 +117,19 @@ cdc-status: ## Show CDC connector status
 
 cdc-clean: ## Delete CDC pipeline resources
 	@$(KUBECTL) delete -f cdc/ --ignore-not-found
+
+# k3s-virsh infrastructure
+setup-k3s-virsh: ## Create VMs and install k3s cluster
+	@./scripts/setup-k3s-virsh.sh
+
+teardown-k3s-virsh: ## Destroy VMs and remove k3s cluster
+	@./scripts/teardown-k3s-virsh.sh
+
+setup-slow-disk: ## Setup tserver storage with optional dm-delay (DISK_DELAY_MS=50)
+	@KUBE_CONTEXT=$(KUBE_CONTEXT) DISK_DELAY_MS=$(DISK_DELAY_MS) ./scripts/setup-slow-disk.sh
+
+setup-slow-throughput: ## Throttle VM disk throughput (DISK_BW_MBPS=10 DISK_IOPS=200)
+	@DISK_BW_MBPS=$(DISK_BW_MBPS) DISK_IOPS=$(DISK_IOPS) ./scripts/setup-slow-throughput.sh
 
 # Cleanup
 clean: ## Delete all resources

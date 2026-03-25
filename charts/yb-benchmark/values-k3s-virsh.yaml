@@ -1,0 +1,160 @@
+# k3s-virsh values - performance tuning lab
+# Node layout: 1 control node (role=master) + 3 worker nodes (role=db)
+# All VMs: 4 CPUs / 8 GB RAM each, cache=none disk
+# Storage: local PVs backed by dm-delay (configurable latency)
+
+fullnameOverride: ""
+
+# Sysbench configuration
+sysbench:
+  enabled: true
+  image:
+    repository: rophy/sysbench
+    tag: yugabyte-20260119
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "512Mi"
+    limits:
+      cpu: "2"
+      memory: "1Gi"
+  nodeSelector:
+    role: master
+
+  # Database connection
+  db:
+    host: yb-tserver-service
+    port: 5433
+    user: yugabyte
+    password: yugabyte
+    name: yugabyte
+
+  # Benchmark parameters
+  tables: 10
+  tableSize: 100000
+  threads: 24
+  time: 120
+  warmupTime: 30
+  reportInterval: 10
+  workload: oltp_read_write
+
+  # YugabyteDB-specific flags
+  rangeKeyPartitioning: false
+  serialCacheSize: 1000
+  createSecondary: true
+
+  # Workload tuning flags (CRITICAL: rangeSelects=false prevents 100x slowdown)
+  rangeSelects: false
+  pointSelects: 10
+  indexUpdates: 10
+  nonIndexUpdates: 10
+  numRowsInInsert: 10
+  threadInitTimeout: 90
+
+# Prometheus configuration
+prometheus:
+  enabled: true
+  image:
+    repository: prom/prometheus
+    tag: v2.48.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  retention: 7d
+  nodeSelector:
+    role: master
+
+# Node exporter - host-level CPU/memory/disk metrics
+nodeExporter:
+  enabled: true
+  image:
+    repository: prom/node-exporter
+    tag: v1.7.0
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "32Mi"
+    limits:
+      cpu: "200m"
+      memory: "64Mi"
+
+# YugabyteDB - 3 masters + 3 tservers, RF=3
+yugabyte:
+  enabled: true
+  replicas:
+    master: 3
+    tserver: 3
+  resource:
+    master:
+      requests:
+        cpu: "0.5"
+        memory: "1Gi"
+      limits:
+        cpu: "1"
+        memory: "2Gi"
+    tserver:
+      requests:
+        cpu: "2"
+        memory: "4Gi"
+      limits:
+        cpu: null
+        memory: null
+  storage:
+    master:
+      size: 5Gi
+    tserver:
+      count: 1
+      size: 10Gi
+      storageClass: local-storage
+  gflags:
+    master:
+      replication_factor: 3
+    tserver:
+      yb_num_shards_per_tserver: 2
+      ysql_num_shards_per_tserver: 2
+  enableLoadBalancer: false
+  ysql:
+    enabled: true
+    port: 5433
+  ycql:
+    enabled: false
+  metrics:
+    enabled: true
+  # Pin masters to control node
+  master:
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: role
+              operator: In
+              values:
+              - master
+  # Pin tservers to db nodes, one per node
+  tserver:
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: role
+              operator: In
+              values:
+              - db
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+        - labelSelector:
+            matchExpressions:
+            - key: app
+              operator: In
+              values:
+              - yb-tserver
+          topologyKey: kubernetes.io/hostname

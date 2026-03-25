@@ -35,3 +35,6 @@ charts/*/charts/
 charts/*/Chart.lock
 
 output/
+
+# VM images and cloud-init ISOs
+.vms/

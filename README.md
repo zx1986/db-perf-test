@@ -20,33 +20,75 @@ Benchmark infrastructure for evaluating YugabyteDB performance using sysbench OL
 - **YugabyteDB** - Distributed PostgreSQL-compatible database (deployed as Helm subchart)
 - **Prometheus** - Metrics collection for performance reports
 
+## Environments
+
+Three deployment environments are supported:
+
+| Environment | Infra | Use Case |
+|---|---|---|
+| **minikube** | minikube (KVM2) | Local development, quick benchmarks |
+| **AWS** | EKS (m6i.xlarge) | Production-scale benchmarks |
+| **k3s-virsh** | libvirt VMs + k3s | Performance tuning lab with I/O simulation |
+
+### k3s-virsh: Performance Tuning Lab
+
+Uses libvirt/virsh-managed VMs with k3s for full control over infrastructure resources:
+
+- **dm-delay** — inject per-I/O latency on tserver storage (inside VMs)
+- **virsh blkdeviotune** — throttle disk throughput/IOPS (from host, requires `cache=none`)
+- **virsh setvcpus / setmem** — adjust CPU/memory per VM
+
+Topology: 1 control node (4 CPU / 8 GB) + 3 worker nodes (4 CPU / 8 GB), Ubuntu 24.04.
+
 ## Prerequisites
 
 - kubectl
 - Helm 3.x
-- Kubernetes cluster (minikube for local, or remote cluster)
+- Kubernetes cluster (minikube, EKS, or k3s-virsh)
 - Python 3 with Jinja2 (`pip install Jinja2`) for report generation
+- For k3s-virsh: libvirt, virt-install, qemu-img, genisoimage
 
 ## Quick Start
 
+### Minikube
+
 ```bash
-# For minikube (local development)
-make deploy-minikube KUBE_CONTEXT=minikube
-
-# For AWS (production benchmarks)
-make deploy-aws KUBE_CONTEXT=my-eks-cluster
-
-# Wait for YugabyteDB pods to be ready
-make status
-
-# Prepare sysbench tables (parameters from values file)
-make sysbench-prepare
-
-# Run benchmark (parameters from values file)
-make sysbench-run
-
-# Generate HTML performance report
+./scripts/setup-minikube.sh
+make deploy-minikube
+make sysbench-prepare && make sysbench-run
 make report
+```
+
+### AWS
+
+```bash
+make deploy-aws KUBE_CONTEXT=my-eks-cluster
+make sysbench-prepare KUBE_CONTEXT=my-eks-cluster
+make sysbench-run KUBE_CONTEXT=my-eks-cluster
+```
+
+### k3s-virsh (Performance Tuning Lab)
+
+```bash
+# Create VMs and install k3s
+./scripts/setup-k3s-virsh.sh
+
+# Setup storage (with optional disk latency)
+DISK_DELAY_MS=50 ./scripts/setup-slow-disk.sh
+
+# Deploy YugabyteDB
+make deploy-k3s-virsh KUBE_CONTEXT=k3s-ygdb
+
+# Run benchmark
+make sysbench-prepare KUBE_CONTEXT=k3s-ygdb
+make sysbench-run KUBE_CONTEXT=k3s-ygdb
+
+# Optional: throttle disk throughput on running cluster
+DISK_BW_MBPS=10 ./scripts/setup-slow-throughput.sh
+
+# Cleanup
+make clean KUBE_CONTEXT=k3s-ygdb
+./scripts/teardown-k3s-virsh.sh
 ```
 
 Reports are saved to `reports/<timestamp>/report.html`.
@@ -60,12 +102,19 @@ Reports are saved to `reports/<timestamp>/report.html`.
 │       ├── Chart.yaml             # YugabyteDB as optional dependency
 │       ├── values-aws.yaml        # AWS production settings
 │       ├── values-minikube.yaml   # Minikube dev settings
+│       ├── values-k3s-virsh.yaml  # k3s-virsh tuning lab settings
 │       └── templates/
 │           ├── sysbench.yaml           # Sysbench deployment
 │           ├── sysbench-configmap.yaml # Sysbench scripts (prepare/run/cleanup)
 │           └── prometheus.yaml         # Prometheus stack
 ├── scripts/
+│   ├── setup-minikube.sh          # Minikube cluster setup
+│   ├── setup-k3s-virsh.sh        # VM creation + k3s install
+│   ├── teardown-k3s-virsh.sh     # VM cleanup
+│   ├── setup-slow-disk.sh        # dm-delay storage setup
+│   ├── setup-slow-throughput.sh   # virsh blkdeviotune wrapper
 │   └── report-generator/          # HTML report generation
+├── .vms/                          # VM disks and cloud images (gitignored)
 ├── Makefile                       # Deployment and benchmark targets
 └── README.md
 ```
@@ -76,8 +125,9 @@ Reports are saved to `reports/<timestamp>/report.html`.
 
 | Target | Description |
 |--------|-------------|
-| `make deploy-minikube` | Deploy with minikube-optimized settings (1 master, 1 tserver) |
-| `make deploy-aws` | Deploy with AWS-optimized settings (3 masters, 3 tservers) |
+| `make deploy-minikube` | Deploy with minikube-optimized settings |
+| `make deploy-aws` | Deploy with AWS-optimized settings |
+| `make deploy-k3s-virsh` | Deploy on k3s-virsh tuning lab |
 | `make deploy-benchmarks` | Deploy benchmarks only (use existing YugabyteDB) |
 | `make clean` | Delete all resources |
 
@@ -98,6 +148,15 @@ Reports are saved to `reports/<timestamp>/report.html`.
 | `make status` | Show status of all components |
 | `make ysql` | Connect to YugabyteDB YSQL shell |
 | `make port-forward-prometheus` | Port forward Prometheus to localhost:9090 |
+
+### k3s-virsh Infrastructure
+
+| Target | Description |
+|--------|-------------|
+| `make setup-k3s-virsh` | Create VMs and install k3s cluster |
+| `make teardown-k3s-virsh` | Destroy VMs and cleanup |
+| `make setup-slow-disk` | Setup tserver storage with dm-delay (`DISK_DELAY_MS=50`) |
+| `make setup-slow-throughput` | Throttle VM disk throughput (`DISK_BW_MBPS=10 DISK_IOPS=200`) |
 
 ## Configuration
 
