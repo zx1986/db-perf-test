@@ -94,15 +94,15 @@ yugabyte:
   resource:
     master:
       requests:
-        cpu: "0.5"
-        memory: "1Gi"
+        cpu: "0.25"
+        memory: "512Mi"
       limits:
         cpu: "1"
         memory: "2Gi"
     tserver:
       requests:
-        cpu: "2"
-        memory: "4Gi"
+        cpu: "0.5"
+        memory: "2Gi"
       limits:
         cpu: null
         memory: null
