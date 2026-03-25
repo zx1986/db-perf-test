@@ -139,6 +139,29 @@ tserver-0 on worker-3 (slow), tserver-1/2 on worker-1/2 (normal).
 | Container CPU | 129.9% | 121.3% | 67.1% | 69.1% | — |
 | System CPU | 14.6% | 14.6% | 25.4% | 29.8% | — |
 
+### Test 7: 200 IOPS throttle (virsh blkdeviotune, no dm-delay)
+
+All 3 workers throttled to 200 total IOPS via `virsh blkdeviotune`.
+Unlike dm-delay (per-I/O latency), this caps the total I/O operations per second,
+affecting both reads and writes.
+
+| Metric | Value |
+|---|---|
+| TPS | 20.50 |
+| QPS | 697.83 |
+| 95th latency | 2198.52 ms |
+| Avg latency | 1175.11 ms |
+| Actual write IOPS (per worker) | ~200 (hitting cap) |
+| Errors | 26 (0.22/s) |
+
+### Full Comparison (2 dedicated vCPUs)
+
+| Metric | No delay (run 1) | No delay (run 2) | 2ms all | 4ms all | 4ms 1-node | 200 IOPS |
+|---|---|---|---|---|---|---|
+| TPS | 44.41 | 47.16 | 33.97 | 30.90 | 37.39 | 20.50 |
+| QPS | 1517.75 | 1608.59 | 1158.24 | 1053.79 | 1275.91 | 697.83 |
+| 95th latency | 658 ms | 601 ms | 894 ms | 1051 ms | 910 ms | 2199 ms |
+
 Run-to-run variance (no delay): ~6% TPS, consistent infrastructure metrics.
 
 ## YugabyteDB Internal Metrics
@@ -176,6 +199,17 @@ Captured from tserver Prometheus endpoints (`/prometheus-metrics`) during benchm
 | Read RPC | **0.59 ms** | 0.21 ms | 0.23 ms |
 | Raft UpdateConsensus | **6.3 ms** | 0.5 ms | 0.6 ms |
 
+### 200 IOPS throttle (all 3 nodes)
+
+| Metric | tserver-0 | tserver-1 | tserver-2 |
+|---|---|---|---|
+| WAL fsync (log_sync_latency) | 200.1 ms | 178.9 ms | 201.9 ms |
+| WAL group commit | 17.2 ms | 15.7 ms | 16.8 ms |
+| Write RPC | 31.6 ms | 30.5 ms | 30.5 ms |
+| Read RPC | 1.63 ms | 0.91 ms | 1.07 ms |
+| Raft UpdateConsensus | 15.2 ms | 13.8 ms | 15.0 ms |
+| Actual write IOPS | 201 | 197 | 201 |
+
 ## Observations
 
 ### CPU pinning (Tests 1-3)
@@ -200,3 +234,17 @@ Captured from tserver Prometheus endpoints (`/prometheus-metrics`) during benchm
 - Raft UpdateConsensus on the slow node (6.3ms) was 12x slower than normal nodes (0.5ms) — followers receiving consensus from the slow leader wait for its disk.
 - Thread fairness stddev nearly doubled (18.9 → 31.6), confirming uneven query distribution across fast vs slow tablets.
 - Even reads were 2.5x slower on the slow node (0.59ms vs 0.21ms), suggesting some read path overhead from the slow disk (possibly WAL reads or compaction).
+
+### IOPS throttle (Test 7)
+- **200 IOPS throttle dropped TPS by 57%** (47.5 → 20.5), the most severe degradation of all tests.
+- WAL fsync latency hit **200ms** — I/O requests queuing behind the IOPS cap, ~50x worse than baseline.
+- Unlike dm-delay, **reads were also affected** (0.24ms → 1.6ms) because reads and writes share the same IOPS budget.
+- Actual write IOPS on all workers hit exactly ~200, confirming the cap is the bottleneck.
+- TPS variance was much higher (16-23 per interval) — bursty behavior as I/O queues drain and refill.
+- 95th latency reached **2.2 seconds** — worst of all tests, due to I/O queuing cascading through Raft consensus.
+
+### dm-delay vs IOPS throttle
+- dm-delay adds **constant latency** per I/O — predictable, affects writes more than reads.
+- IOPS throttle creates **queuing delay** — unpredictable, affects both reads and writes equally.
+- At comparable TPS impact levels, IOPS throttle produces worse tail latency (2.2s vs 1.1s at 95th percentile) due to queuing amplification.
+- IOPS throttle is more representative of cloud environments where IOPS are provisioned (e.g., AWS EBS gp3 baseline: 3000 IOPS).
