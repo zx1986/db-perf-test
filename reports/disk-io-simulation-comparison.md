@@ -102,10 +102,74 @@ Both methods can be applied simultaneously for realistic simulation:
 
 Example: dm-delay 1ms + IOPS 200 would simulate a cloud SSD volume with ~1ms base latency and 200 IOPS provisioned capacity.
 
+## Raw vs qcow2 Disk Format
+
+qcow2 format adds a metadata layer (copy-on-write, thin provisioning) that amplifies I/O: a single guest write triggers multiple host I/Os for data + metadata updates. Raw format maps guest I/O 1:1 to host I/O.
+
+**Raw format is recommended for performance testing.**
+
+### Raw Format Results (dm-delay 1ms)
+
+| Metric | qcow2 | raw | Impact |
+|---|---|---|---|
+| Write latency (w_await) | 9.07 ms | **1.28 ms** | qcow2 amplifies 7x |
+| Read latency (r_await) | 1.18 ms | **0.74 ms** | qcow2 amplifies 1.6x |
+| Write IOPS | 53 | **74** | raw 40% more |
+| Write merge ratio | 45% | 47% | similar |
+
+### Full Comparison (raw format)
+
+#### Sequential Write (4k x 500, O_DIRECT)
+
+| VM | Speed | Effective IOPS | vs Raw baseline |
+|---|---|---|---|
+| Raw (no throttle) | 43.4 MB/s | ~10,850 | — |
+| Raw + dm-delay 1ms | 4.1 MB/s | ~1,025 | -91% |
+| Raw + IOPS 200 | 834 KB/s | ~209 | -98% |
+
+#### Sequential Read (4k x 500, O_DIRECT)
+
+| VM | Speed | Effective IOPS | vs Raw baseline |
+|---|---|---|---|
+| Raw (no throttle) | 9.3 MB/s | ~2,325 | — |
+| Raw + dm-delay 1ms | 2.0 MB/s | ~500 | -78% |
+| Raw + IOPS 200 | 416 KB/s | ~104 | -96% |
+
+#### Large Block Write (1M x 50, O_DIRECT)
+
+| VM | Speed | vs Raw baseline |
+|---|---|---|
+| Raw (no throttle) | 1.9 GB/s | — |
+| Raw + dm-delay 1ms | 599 MB/s | -68% |
+| Raw + IOPS 200 | 356 MB/s | -81% |
+
+#### iostat During 4k Write Stress (raw format)
+
+| Metric | Raw baseline | dm-delay 1ms | IOPS 200 |
+|---|---|---|---|
+| Write IOPS (w/s) | 456 | 74 | 42 |
+| Write BW (wkB/s) | 12,299 | 15,476 | 11,212 |
+| Write latency (w_await) | **0.06 ms** | **1.28 ms** | **60.16 ms** |
+| Read latency (r_await) | **0.12 ms** | **0.74 ms** | **15.30 ms** |
+| Avg write size (wareq-sz) | 27 KB | 209 KB | 265 KB |
+| Disk utilization (%util) | 2.8% | 15.8% | 76.7% |
+
+### Summary Table
+
+| Metric | qcow2 baseline | raw baseline | raw + 1ms delay | raw + 200 IOPS |
+|---|---|---|---|---|
+| 4k write speed | 89 MB/s | 43 MB/s | 4.1 MB/s | 834 KB/s |
+| Write latency | 0.23 ms | 0.06 ms | 1.28 ms | 60 ms |
+| Read latency | 0.40 ms | 0.12 ms | 0.74 ms | 15 ms |
+| dm-delay amplification | 9x (1ms→9ms) | **1.3x (1ms→1.3ms)** | — | — |
+
+**Key finding:** qcow2's raw 4k write speed (89 MB/s) appears faster than raw (43 MB/s) because qcow2 batches writes through its metadata layer, but this comes at the cost of unpredictable I/O amplification under throttling. Raw format gives predictable, linear latency scaling.
+
 ## Methodology Notes
 
 - dm-delay is created on the host via privileged Docker container, filesystem mounted via `nsenter`.
-- The VM's qcow2 disk image sits on the dm-delay filesystem, so all VM I/O traverses the delay.
+- The VM's disk image sits on the dm-delay filesystem, so all VM I/O traverses the delay.
 - Both read and write delays must be specified: `"0 $SECTORS delay $LOOP 0 $MS $LOOP 0 $MS"` (5-arg form only delays reads).
 - IOPS throttle applied via `virsh blkdeviotune <vm> vda --total-iops-sec 200 --live`.
 - All tests use `O_DIRECT` to bypass guest page cache.
+- **Raw disk format recommended** for performance testing to avoid qcow2 I/O amplification.
