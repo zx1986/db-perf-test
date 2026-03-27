@@ -69,6 +69,7 @@ data:
       --time={{ .Values.sysbench.time | int }} \
       --warmup-time={{ .Values.sysbench.warmupTime | int }} \
       --report-interval={{ .Values.sysbench.reportInterval | int }} \
+      --verbosity={{ .Values.sysbench.verbosity | default 3 | int }} \
       run
 
   sysbench-cleanup.sh: |

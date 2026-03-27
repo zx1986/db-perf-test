@@ -46,9 +46,9 @@ sysbench:
 
   # Workload tuning flags (CRITICAL: rangeSelects=false prevents 100x slowdown)
   rangeSelects: false
-  pointSelects: 10
-  indexUpdates: 10
-  nonIndexUpdates: 10
+  pointSelects: 2
+  indexUpdates: 20
+  nonIndexUpdates: 20
   numRowsInInsert: 10
   threadInitTimeout: 90
 
