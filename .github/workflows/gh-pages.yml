@@ -1,0 +1,112 @@
+name: Deploy reports to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'reports/*/report.html'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout master
+        uses: actions/checkout@v4
+
+      - name: Build pages directory
+        run: |
+          mkdir -p _site
+
+          # Copy all report.html files preserving folder structure
+          for dir in reports/*/; do
+            if [ -f "${dir}report.html" ]; then
+              mkdir -p "_site/${dir}"
+              cp "${dir}report.html" "_site/${dir}"
+            fi
+          done
+
+          # Generate index page
+          cat > _site/index.html <<'HEREDOC'
+          <!DOCTYPE html>
+          <html lang="en">
+          <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>DB Performance Test Reports</title>
+              <style>
+                  body {
+                      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                      max-width: 800px;
+                      margin: 40px auto;
+                      padding: 0 20px;
+                      background: #f5f5f5;
+                      color: #333;
+                      line-height: 1.6;
+                  }
+                  h1 {
+                      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                      color: white;
+                      padding: 20px 30px;
+                      border-radius: 10px;
+                      margin-bottom: 30px;
+                  }
+                  ul { list-style: none; padding: 0; }
+                  li {
+                      background: white;
+                      margin-bottom: 8px;
+                      border-radius: 8px;
+                      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                  }
+                  a {
+                      display: block;
+                      padding: 15px 20px;
+                      color: #4c5fd5;
+                      text-decoration: none;
+                      font-weight: 500;
+                      font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+                  }
+                  a:hover { background: #f8f9fa; border-radius: 8px; }
+              </style>
+          </head>
+          <body>
+              <h1>DB Performance Test Reports</h1>
+              <ul>
+          HEREDOC
+
+          # List reports in reverse chronological order
+          for dir in $(ls -dr reports/*/); do
+            name=$(basename "$dir")
+            if [ -f "${dir}report.html" ]; then
+              echo "        <li><a href=\"reports/${name}/report.html\">${name}</a></li>" >> _site/index.html
+            fi
+          done
+
+          cat >> _site/index.html <<'HEREDOC'
+              </ul>
+          </body>
+          </html>
+          HEREDOC
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
