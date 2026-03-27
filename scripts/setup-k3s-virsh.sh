@@ -6,7 +6,7 @@ KUBE_CONTEXT="${KUBE_CONTEXT:-k3s-ygdb}"
 VM_PREFIX="${VM_PREFIX:-ygdb}"
 CONTROL_CPUS="${CONTROL_CPUS:-2}"
 CONTROL_MEMORY="${CONTROL_MEMORY:-8192}"
-WORKER_CPUS="${WORKER_CPUS:-3}"
+WORKER_CPUS="${WORKER_CPUS:-2}"
 WORKER_MEMORY="${WORKER_MEMORY:-8192}"
 # CPU pinning for worker VMs: comma-separated cpuset per worker (e.g. "0,2,4 6,8,10 1,3,5")
 # Leave empty for shared CPUs (no pinning)
