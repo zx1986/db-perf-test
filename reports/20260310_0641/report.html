@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sysbench Stress Test Report</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        header h1 {
+            font-size: 2rem;
+            margin-bottom: 15px;
+        }
+        .metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+        .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .metadata-label {
+            font-weight: 600;
+        }
+        .section {
+            background: white;
+            border-radius: 10px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .section h2 {
+            font-size: 1.3rem;
+            color: #444;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #eee;
+        }
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        .summary-table th,
+        .summary-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        .summary-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            color: #555;
+        }
+        .summary-table tr:hover {
+            background-color: #f8f9fa;
+        }
+        .summary-table td:not(:first-child) {
+            text-align: right;
+            font-family: 'SF Mono', Monaco, 'Courier New', monospace;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-bottom: 20px;
+        }
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 25px;
+        }
+        .chart-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+        }
+        .chart-card h3 {
+            font-size: 1.1rem;
+            color: #555;
+            margin-bottom: 15px;
+        }
+        .pods-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .pod-badge {
+            background: #e3e8ff;
+            color: #4c5fd5;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+        .stat-value {
+            color: #4c5fd5;
+            font-weight: 600;
+        }
+        .spec-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .spec-info {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 30px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        .spec-info .metadata-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .spec-info .metadata-label {
+            font-weight: 600;
+            color: #555;
+        }
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #888;
+            font-size: 0.85rem;
+        }
+        @media (max-width: 768px) {
+            .chart-grid {
+                grid-template-columns: 1fr;
+            }
+            .metadata {
+                flex-direction: column;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Sysbench Stress Test Report</h1>
+            <div class="metadata">
+                <div class="metadata-item">
+                    <span class="metadata-label">Start:</span>
+                    <span>2026-03-10 06:35:07</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">End:</span>
+                    <span>2026-03-10 06:41:08</span>
+                </div>
+                <div class="metadata-item">
+                    <span class="metadata-label">Duration:</span>
+                    <span>6.0 minutes</span>
+                </div>
+            </div>
+            <div class="pods-list">
+                
+                <span class="pod-badge">yb-tserver.*</span>
+                
+                <span class="pod-badge">yb-master.*</span>
+                
+                <span class="pod-badge">sysbench.*</span>
+                
+            </div>
+        </header>
+
+        
+        <section class="section">
+            <h2>Cluster Configuration</h2>
+            <div class="spec-grid">
+                <table class="summary-table">
+                    <thead>
+                        <tr>
+                            <th>Component</th>
+                            <th>Replicas</th>
+                            <th>CPU Request</th>
+                            <th>CPU Limit</th>
+                            <th>Memory Request</th>
+                            <th>Memory Limit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td>yb-master</td>
+                            <td class="stat-value">3</td>
+                            <td>500m</td>
+                            <td>1</td>
+                            <td>1Gi</td>
+                            <td>2Gi</td>
+                        </tr>
+                        
+                        
+                        <tr>
+                            <td>yb-tserver</td>
+                            <td class="stat-value">3</td>
+                            <td>2</td>
+                            <td>N/A</td>
+                            <td>4Gi</td>
+                            <td>N/A</td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+                <div class="spec-info">
+                    
+                    <div class="metadata-item">
+                        <span class="metadata-label">YugabyteDB Version:</span>
+                        <span>2.23.1.0-b220</span>
+                    </div>
+                    
+                    
+                    <div class="metadata-item">
+                        <span class="metadata-label">Storage Class:</span>
+                        <span>standard</span>
+                    </div>
+                    <div class="metadata-item">
+                        <span class="metadata-label">PVC Size:</span>
+                        <span>10Gi</span>
+                    </div>
+                    
+                </div>
+            </div>
+        </section>
+        
+
+        <section class="section">
+            <h2>Metrics Summary</h2>
+            <table class="summary-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Min</th>
+                        <th>Avg</th>
+                        <th>Max</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    
+                    <tr>
+                        <td>CPU Usage (%)</td>
+                        <td class="stat-value">11.25</td>
+                        <td class="stat-value">198.39</td>
+                        <td class="stat-value">315.80</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Memory Usage (MB)</td>
+                        <td class="stat-value">253.16</td>
+                        <td class="stat-value">528.17</td>
+                        <td class="stat-value">1345.88</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Network RX (B/s)</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Network TX (B/s)</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Disk Read IOPS</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Disk Write IOPS</td>
+                        <td class="stat-value">6.91</td>
+                        <td class="stat-value">39.07</td>
+                        <td class="stat-value">55.18</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Disk Read (MB/s)</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                        <td class="stat-value">0.00</td>
+                    </tr>
+                    
+                    <tr>
+                        <td>Disk Write (MB/s)</td>
+                        <td class="stat-value">0.84</td>
+                        <td class="stat-value">3.09</td>
+                        <td class="stat-value">18.26</td>
+                    </tr>
+                    
+                </tbody>
+            </table>
+        </section>
+
+        <section class="section">
+            <h2>Resource Usage Charts</h2>
+            <div class="chart-grid">
+                
+                <div class="chart-card">
+                    <h3>CPU Usage (%)</h3>
+                    <div class="chart-container">
+                        <canvas id="cpu-chart"></canvas>
+                    </div>
+                </div>
+                
+
+                
+                <div class="chart-card">
+                    <h3>Memory Usage (MB)</h3>
+                    <div class="chart-container">
+                        <canvas id="memory-chart"></canvas>
+                    </div>
+                </div>
+                
+
+                
+
+                
+
+                
+                <div class="chart-card">
+                    <h3>Disk Read IOPS</h3>
+                    <div class="chart-container">
+                        <canvas id="disk-read-iops-chart"></canvas>
+                    </div>
+                </div>
+                
+
+                
+                <div class="chart-card">
+                    <h3>Disk Write IOPS</h3>
+                    <div class="chart-container">
+                        <canvas id="disk-write-iops-chart"></canvas>
+                    </div>
+                </div>
+                
+
+                
+                <div class="chart-card">
+                    <h3>Disk Read Throughput (MB/s)</h3>
+                    <div class="chart-container">
+                        <canvas id="disk-read-throughput-chart"></canvas>
+                    </div>
+                </div>
+                
+
+                
+                <div class="chart-card">
+                    <h3>Disk Write Throughput (MB/s)</h3>
+                    <div class="chart-container">
+                        <canvas id="disk-write-throughput-chart"></canvas>
+                    </div>
+                </div>
+                
+            </div>
+        </section>
+
+        
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+            
+        
+
+        
+
+        <footer>
+            <p>Generated by db-perf-test Report Generator</p>
+        </footer>
+    </div>
+
+    <script>
+        const colors = [
+            'rgba(102, 126, 234, 1)',
+            'rgba(118, 75, 162, 1)',
+            'rgba(52, 211, 153, 1)',
+            'rgba(251, 191, 36, 1)',
+            'rgba(239, 68, 68, 1)',
+            'rgba(236, 72, 153, 1)',
+        ];
+
+        const colorsBg = [
+            'rgba(102, 126, 234, 0.1)',
+            'rgba(118, 75, 162, 0.1)',
+            'rgba(52, 211, 153, 0.1)',
+            'rgba(251, 191, 36, 0.1)',
+            'rgba(239, 68, 68, 0.1)',
+            'rgba(236, 72, 153, 0.1)',
+        ];
+
+        function createChart(canvasId, seriesData, yAxisLabel) {
+            const canvas = document.getElementById(canvasId);
+            if (!canvas || !seriesData || seriesData.length === 0) return;
+
+            const datasets = seriesData.map((series, idx) => ({
+                label: series.name,
+                data: series.timestamps.map((t, i) => ({
+                    x: new Date(t * 1000),
+                    y: series.values[i]
+                })),
+                borderColor: colors[idx % colors.length],
+                backgroundColor: colorsBg[idx % colorsBg.length],
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0,
+            }));
+
+            new Chart(canvas, {
+                type: 'line',
+                data: { datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                displayFormats: {
+                                    second: 'HH:mm:ss',
+                                    minute: 'HH:mm',
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: yAxisLabel
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    }
+                }
+            });
+        }
+
+        // Initialize charts with data from template
+        const metricsData = {"cpu": {"avg": 198.38821650724358, "max": 315.80220135760953, "min": 11.253306727480062, "name": "CPU Usage (%)", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124867.0], "values": [0.40669311477076187, 0.508624852602618, 0.5244083803734222, 0.5267706131078218, 0.40536254690715473, 0.5461467306469322, 0.5293091576772989, 0.4689570728896492, 0.4031764229835411, 0.4262833099579204]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.777028592330674, 0.5659755200321048, 0.42621391484942706, 0.5023324206469988, 0.4106395424411813, 0.47914662767881133, 0.5199521903491228, 0.40076551724138104, 0.320729499130814, 0.5188609652413033]}, {"name": "yb-master-2", "timestamps": [1773124567.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124807.0, 1773124867.0], "values": [1.1814238662275094, 1.114341138034283, 1.23702664796633, 1.2454233588024297, 0.8449899914599317, 1.3788144699140275, 1.3044655878880598]}, {"name": "yb-tserver-0", "timestamps": [1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [310.70697844737396, 313.1528782444835, 308.1836731493098, 314.9438387096776, 287.26235172769503, 311.78756228822004, 312.9030582238777, 315.80220135760953, 314.4905896711207]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [11.253306727480062, 129.46039563669743, 178.91897519721408, 181.2099281946072, 180.079229701831, 181.88043083900206, 182.68808620428024, 184.917946514332]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [89.49833996588973, 107.8132779595814, 159.500443746956, 156.82119391634996, 157.2553189321376, 118.62586213721389, 109.59716967948721, 157.58382790091235, 157.17156095422934, 162.54073254175916, 158.8209036334915]}], "total": 71618.14615911493}, "disk_read_iops": {"avg": 0, "max": 0.0, "min": 0, "name": "Disk Read IOPS", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-master-2", "timestamps": [1773124567.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124807.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-0", "timestamps": [1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}], "total": 0.0}, "disk_read_throughput": {"avg": 0, "max": 0.0, "min": 0, "name": "Disk Read (MB/s)", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-master-2", "timestamps": [1773124567.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124807.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-0", "timestamps": [1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}], "total": 0.0}, "disk_write_iops": {"avg": 39.072060924504285, "max": 55.18308406395049, "min": 6.912770809578107, "name": "Disk Write IOPS", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124867.0], "values": [0.4333841618379587, 0.39305968892133186, 0.3799392097264438, 0.4624735729386892, 0.24210144050357102, 0.4046944556859571, 0.401652513197154, 0.21607605877268798, 0.26975991367682767, 0.22440392706872372]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.42675120404804, 0.4681961072837937, 0.29075804776739356, 0.3549335767163574, 0.2599766021058105, 0.38474856681158864, 0.38914832110295755, 0.20689655172413793, 0.21194046066927422, 0.4376094023505876]}, {"name": "yb-master-2", "timestamps": [1773124567.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124807.0, 1773124867.0], "values": [0.35469977197871805, 0.27225701061802343, 0.3272557269752221, 0.3638442746504496, 0.23196963535312456, 0.41786055396370586, 0.48614487117160915]}, {"name": "yb-tserver-0", "timestamps": [1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [40.75120318058171, 44.19184244118898, 40.987034713509, 39.41935483870968, 55.18308406395049, 42.4556507873231, 41.49513167352807, 42.69491847998477, 45.09249743062691]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [6.912770809578107, 27.93637503358109, 40.08243905905764, 42.423798358733876, 40.376349544793044, 41.57218442932729, 40.82561845500076, 43.52661645012892]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [37.97612279704378, 27.0803620054461, 43.779425293576494, 41.44486692015209, 41.012838801711844, 29.972519142186027, 29.160798816568047, 41.19947848761408, 40.82399348819736, 44.945327698396724, 40.69510268562401]}], "total": 14105.013993746046}, "disk_write_throughput": {"avg": 3.0856666228430525, "max": 18.26099701534963, "min": 0.8446089412442913, "name": "Disk Write (MB/s)", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124867.0], "values": [0.0012696801616346445, 0.0010967067213206805, 0.0010600982414242293, 0.0012903838530655392, 0.0007092815639753057, 0.0011291697982309071, 0.0011206822354831304, 0.0005626980697205417, 0.0007903122471000811, 0.0006574333800841516]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [0.001190712064866183, 0.0013063507457695138, 0.0008112668743509865, 0.0009903280600344793, 0.0007616502014818666, 0.0010520468623754378, 0.0010857933066488771, 0.0005387931034482759, 0.0006209193183670143, 0.0012210083770942733]}, {"name": "yb-master-2", "timestamps": [1773124567.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124807.0, 1773124867.0], "values": [0.0009896757030656194, 0.0007976279607949905, 0.0009131019167835439, 0.0010151904984666562, 0.0006795985410736072, 0.0011659055635148043, 0.0013564310021529273]}, {"name": "yb-tserver-0", "timestamps": [1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [1.2879835608913999, 3.5541152513525014, 1.6196397297156002, 1.4105342741935483, 16.62198799495731, 1.295335442827719, 1.2415866170032022, 1.6070564771934275, 3.4806975847893105]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124627.0, 1773124657.0, 1773124777.0, 1773124807.0, 1773124837.0], "values": [5.0078058188426455, 0.8446089412442913, 1.431079436429536, 1.7965658887749119, 1.2748491809659188, 1.4086711073318217, 1.3540560024282895, 4.035201076790861]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [18.26099701534963, 0.8447744077533504, 3.4849525136641595, 1.7986573193916349, 1.3302106684328512, 1.0678470557926085, 0.9721471662352071, 1.3323011734028682, 1.2999636059107134, 4.710454819883276, 2.024585308056872]}], "total": 1113.925650846342}, "memory": {"avg": 528.1656650641025, "max": 1345.875, "min": 253.16015625, "name": "Memory Usage (MB)", "series": [{"name": "yb-master-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [59.15625, 59.15625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625, 59.16015625]}, {"name": "yb-master-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [58.51171875, 58.51171875, 58.51171875, 58.51171875, 58.7578125, 58.51171875, 58.515625, 58.515625, 58.515625, 58.515625, 58.515625, 58.515625, 58.515625]}, {"name": "yb-master-2", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [97.87890625, 97.7578125, 97.75, 97.75, 97.75, 97.75, 97.75390625, 97.75390625, 97.75390625, 93.79296875, 93.796875, 93.796875, 93.80078125]}, {"name": "yb-tserver-0", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [394.8203125, 610.05078125, 584.18359375, 602.734375, 735.48046875, 731.9765625, 774.44140625, 1026.76953125, 1193.515625, 1199.30078125, 1213.140625, 1277.3125, 1345.875]}, {"name": "yb-tserver-1", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [253.16015625, 315.47265625, 324.265625, 332.5625, 337.796875, 348.4296875, 344.28515625, 348.05078125, 347.015625, 354.55078125, 352.64453125, 359.49609375, 358.76953125]}, {"name": "yb-tserver-2", "timestamps": [1773124507.0, 1773124537.0, 1773124567.0, 1773124597.0, 1773124627.0, 1773124657.0, 1773124687.0, 1773124717.0, 1773124747.0, 1773124777.0, 1773124807.0, 1773124837.0, 1773124867.0], "values": [343.640625, 393.65625, 353.9765625, 332.421875, 339.21875, 340.625, 340.91015625, 344.54296875, 347.390625, 346.2109375, 349.46484375, 348.62890625, 351.671875]}], "total": 190667.80508814103}, "network_rx": {"avg": 0, "max": 0, "min": 0, "name": "Network RX (B/s)", "series": [], "total": 0.0}, "network_tx": {"avg": 0, "max": 0, "min": 0, "name": "Network TX (B/s)", "series": [], "total": 0.0}};
+
+        // Resource charts
+        if (metricsData.cpu) createChart('cpu-chart', metricsData.cpu.series, 'CPU %');
+        if (metricsData.memory) createChart('memory-chart', metricsData.memory.series, 'Memory MB');
+        if (metricsData.network_rx) createChart('network-rx-chart', metricsData.network_rx.series, 'Bytes/s');
+        if (metricsData.network_tx) createChart('network-tx-chart', metricsData.network_tx.series, 'Bytes/s');
+
+        // Disk I/O charts
+        if (metricsData.disk_read_iops) createChart('disk-read-iops-chart', metricsData.disk_read_iops.series, 'IOPS');
+        if (metricsData.disk_write_iops) createChart('disk-write-iops-chart', metricsData.disk_write_iops.series, 'IOPS');
+        if (metricsData.disk_read_throughput) createChart('disk-read-throughput-chart', metricsData.disk_read_throughput.series, 'MB/s');
+        if (metricsData.disk_write_throughput) createChart('disk-write-throughput-chart', metricsData.disk_write_throughput.series, 'MB/s');
+
+        // Custom metrics charts
+        Object.keys(metricsData).forEach(key => {
+            if (key.startsWith('rate_') || key.startsWith('total_')) {
+                createChart('chart-' + key, metricsData[key].series, 'Value');
+            }
+        });
+    </script>
+</body>
+</html>
