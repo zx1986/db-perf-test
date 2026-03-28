@@ -1,0 +1,4 @@
+pod_name	node_name	cpu	memory
+yb-tserver-0	ygdb-worker-3	4	8131812Ki
+yb-tserver-1	ygdb-worker-1	4	8131816Ki
+yb-tserver-2	ygdb-worker-2	4	8131812Ki
