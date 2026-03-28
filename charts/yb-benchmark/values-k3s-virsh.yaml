@@ -33,7 +33,7 @@ sysbench:
   # Benchmark parameters
   tables: 10
   tableSize: 100000
-  threads: 48
+  threads: 512
   time: 120
   warmupTime: 30
   reportInterval: 10
