@@ -104,6 +104,16 @@ create_vm() {
 
     # Generate cloud-init
     mkdir -p "/tmp/cloud-init-${name}"
+    # Detect if network provides a default route (has <forward> element)
+    local needs_dummy_route=false
+    if ! virsh net-dumpxml "$NETWORK" 2>/dev/null | grep -q "<forward"; then
+        needs_dummy_route=true
+    fi
+
+    # Determine the network gateway IP (first IP in the network definition)
+    local gateway_ip
+    gateway_ip=$(virsh net-dumpxml "$NETWORK" 2>/dev/null | grep "ip address" | head -1 | sed "s/.*address='\([^']*\)'.*/\1/")
+
     if [ "$AIRGAP_MODE" = true ]; then
         # Pre-baked image already has dmsetup installed
         cat > "/tmp/cloud-init-${name}/user-data" << EOF
@@ -129,6 +139,14 @@ users:
 packages:
   - dmsetup
 package_update: true
+EOF
+    fi
+
+    # Add dummy default route for isolated networks (k3s requires one)
+    if [ "$needs_dummy_route" = true ] && [ -n "$gateway_ip" ]; then
+        cat >> "/tmp/cloud-init-${name}/user-data" << EOF
+runcmd:
+  - ip route add default via ${gateway_ip} || true
 EOF
     fi
 
