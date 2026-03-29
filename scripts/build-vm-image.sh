@@ -189,6 +189,7 @@ ssh $SSH_OPTS "ubuntu@${BUILD_IP}" "
     sudo apt-get clean
     sudo rm -rf /var/lib/apt/lists/*
     sudo cloud-init clean --logs --seed
+    sudo fstrim -v / 2>/dev/null || sudo dd if=/dev/zero of=/tmp/zeros bs=1M 2>/dev/null; sudo rm -f /tmp/zeros
     sudo rm -f /etc/ssh/ssh_host_*
     sudo rm -f /etc/machine-id && sudo touch /etc/machine-id
     sudo truncate -s 0 /var/log/syslog /var/log/auth.log /var/log/kern.log 2>/dev/null || true
