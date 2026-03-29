@@ -199,14 +199,16 @@ echo "  Cleaned"
 echo ""
 echo "Shutting down builder VM..."
 ssh $SSH_OPTS "ubuntu@${BUILD_IP}" "sudo shutdown -h now" 2>/dev/null || true
-sleep 5
 
-# Wait for VM to stop
-for attempt in $(seq 1 20); do
+# Wait for VM to fully stop
+echo "  Waiting for VM to stop..."
+for attempt in $(seq 1 30); do
     if virsh domstate "$BUILD_VM" 2>/dev/null | grep -q "shut off"; then
+        echo "  VM stopped"
         break
     fi
-    sleep 2
+    [ "$attempt" -eq 30 ] && { echo "  Force stopping..."; virsh destroy "$BUILD_VM" 2>/dev/null || true; sleep 2; }
+    sleep 3
 done
 
 echo "Converting disk to output image..."
